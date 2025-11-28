@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { generateSessionPlan, SessionPlan } from '../services/geminiService';
-import { Sparkles, ArrowRight, Loader2, BookOpen, Check, TreePine, Waves, Sun, Orbit } from 'lucide-react';
+import { Sparkles, ArrowRight, Loader2, BookOpen, Check, TreePine, Waves, Sun, Orbit, Music } from 'lucide-react';
 
 export type ThemeType = 'nebula' | 'forest' | 'ocean' | 'sunrise';
 
@@ -10,6 +10,7 @@ interface IntakeProps {
 
 const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
   const [issue, setIssue] = useState('');
+  const [musicPref, setMusicPref] = useState('Deep ambient drone for trance');
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<ThemeType>('nebula');
@@ -20,7 +21,7 @@ const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
     
     setLoading(true);
     try {
-      const generatedPlan = await generateSessionPlan(issue);
+      const generatedPlan = await generateSessionPlan(issue, musicPref);
       setPlan(generatedPlan);
     } catch (error) {
       alert("Failed to generate plan. Please try again.");
@@ -38,13 +39,16 @@ const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
 
   if (plan) {
     return (
-      <div className="w-full max-w-3xl mx-auto p-6 animate-in slide-in-from-bottom-4 duration-500">
+      <div className="w-full max-w-3xl mx-auto p-6 animate-in slide-in-from-bottom-4 duration-500 pb-20">
         <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8 shadow-2xl">
           <div className="mb-6 flex items-center gap-3">
             <div className="bg-green-500/20 p-2 rounded-full">
               <Check className="w-6 h-6 text-green-400" />
             </div>
-            <h2 className="text-2xl font-semibold text-white">Session Plan Ready</h2>
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Session Plan Ready</h2>
+              <p className="text-slate-400 text-sm">Gemini 3 Pro has designed your experience</p>
+            </div>
           </div>
           
           <div className="space-y-6">
@@ -53,29 +57,48 @@ const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
               <p className="text-slate-200 leading-relaxed text-lg">{plan.summary}</p>
             </div>
 
-            {plan.sources.length > 0 && (
-              <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50">
-                <h3 className="text-indigo-400 text-xs uppercase tracking-wider font-semibold mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4" />
-                  Grounded in Medical Literature
-                </h3>
-                <ul className="space-y-2">
-                  {plan.sources.map((source, idx) => (
-                    <li key={idx}>
-                      <a 
-                        href={source.uri} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-sm text-slate-400 hover:text-indigo-300 transition-colors flex items-center gap-2 truncate"
-                      >
-                        <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full flex-shrink-0" />
-                        {source.title || source.uri}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               {/* Grounding Info */}
+              {plan.sources.length > 0 && (
+                <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50">
+                  <h3 className="text-indigo-400 text-xs uppercase tracking-wider font-semibold mb-3 flex items-center gap-2">
+                    <BookOpen className="w-4 h-4" />
+                    Medical Literature
+                  </h3>
+                  <ul className="space-y-2">
+                    {plan.sources.slice(0, 3).map((source, idx) => (
+                      <li key={idx}>
+                        <a 
+                          href={source.uri} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-sm text-slate-400 hover:text-indigo-300 transition-colors flex items-center gap-2 truncate"
+                        >
+                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full flex-shrink-0" />
+                          <span className="truncate">{source.title || source.uri}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Music Engine Info */}
+              <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-2 opacity-10">
+                     <Music className="w-12 h-12" />
+                  </div>
+                  <h3 className="text-purple-400 text-xs uppercase tracking-wider font-semibold mb-3 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Lyria 2 Audio Engine
+                  </h3>
+                  <div className="space-y-2 text-sm text-slate-300">
+                     <p><span className="text-slate-500">Mode:</span> {plan.musicConfig.style}</p>
+                     <p><span className="text-slate-500">Binaural:</span> {plan.musicConfig.binauralFreq}Hz (Target)</p>
+                     <p><span className="text-slate-500">Isochronic:</span> {plan.musicConfig.isochronic ? 'Enabled' : 'Disabled'}</p>
+                  </div>
               </div>
-            )}
+            </div>
 
             <div className="pt-6 flex justify-end">
               <button 
@@ -93,7 +116,7 @@ const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-6 animate-in fade-in duration-700">
+    <div className="w-full max-w-2xl mx-auto p-6 animate-in fade-in duration-700 pb-20">
       <div className="text-center mb-10">
         <h2 className="text-3xl font-light text-white mb-3">What brings you here today?</h2>
         <p className="text-slate-400">
@@ -102,17 +125,34 @@ const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-          <div className="relative bg-slate-900 rounded-2xl p-2 ring-1 ring-slate-700/50">
-            <textarea
-              value={issue}
-              onChange={(e) => setIssue(e.target.value)}
-              placeholder="I want to reduce my anxiety about public speaking..."
-              className="w-full bg-transparent text-white placeholder-slate-500 p-4 h-32 focus:outline-none resize-none text-lg"
-              disabled={loading}
+        <div className="space-y-4">
+            <label className="text-slate-400 text-sm font-medium uppercase tracking-wider">Goal / Issue</label>
+            <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+            <div className="relative bg-slate-900 rounded-2xl p-2 ring-1 ring-slate-700/50">
+                <textarea
+                value={issue}
+                onChange={(e) => setIssue(e.target.value)}
+                placeholder="I want to reduce my anxiety about public speaking..."
+                className="w-full bg-transparent text-white placeholder-slate-500 p-4 h-32 focus:outline-none resize-none text-lg"
+                disabled={loading}
+                />
+            </div>
+            </div>
+        </div>
+
+        <div className="space-y-4">
+            <label className="text-slate-400 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+                <Music className="w-4 h-4" />
+                Lyria 2 Music Preference
+            </label>
+            <input 
+                type="text" 
+                value={musicPref}
+                onChange={(e) => setMusicPref(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                placeholder="e.g. Deep ambient, Celestial, Soft Rain, or 'Surprise me'"
             />
-          </div>
         </div>
 
         <div className="space-y-3">
@@ -143,9 +183,9 @@ const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
         </div>
 
         <div className="flex justify-between items-center pt-4">
-            <div className="text-xs text-slate-500 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-indigo-400" />
-              Powered by Gemini 2.5
+            <div className="text-xs text-slate-500 flex flex-col gap-1">
+              <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-indigo-400" /> Intelligence: Gemini 3 Pro</span>
+              <span className="flex items-center gap-1"><Music className="w-3 h-3 text-purple-400" /> Audio: Lyria 2 Engine</span>
             </div>
             <button
               type="submit"
@@ -165,10 +205,10 @@ const Intake: React.FC<IntakeProps> = ({ onPlanReady }) => {
       {loading && (
         <div className="mt-8 text-center space-y-3 animate-in fade-in delay-200">
           <div className="text-indigo-400 text-sm font-medium animate-pulse">
-            Consulting medical literature...
+            Consulting medical literature & Configuring Lyria...
           </div>
           <p className="text-slate-500 text-xs">
-            Designing a safe, evidence-based hypnosis plan for your virtual room.
+            Gemini 3 Pro is designing your safety protocols and binaural soundscape.
           </p>
         </div>
       )}

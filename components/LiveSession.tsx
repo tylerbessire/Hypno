@@ -1,23 +1,27 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { Play, Mic, MicOff, PhoneOff, AlertCircle, Headphones, Clock } from 'lucide-react';
+import { Play, Mic, MicOff, PhoneOff, AlertCircle, Headphones, Clock, Music, Volume2, Volume1, VolumeX } from 'lucide-react';
 import Orb from './Orb';
 import { base64ToUint8Array, createPcmBlob, decodeAudioData } from '../utils/audioUtils';
 import { ThemeType } from './Intake';
+import { MusicConfig } from '../services/geminiService';
+import { lyria } from '../utils/musicEngine';
 
 interface LiveSessionProps {
   systemInstruction: string;
   theme: ThemeType;
+  musicConfig: MusicConfig;
   onEndSession: () => void;
 }
 
-const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, onEndSession }) => {
+const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, musicConfig, onEndSession }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [currentVolume, setCurrentVolume] = useState(0); // 0-1 for visualizer
   const [modelState, setModelState] = useState<'idle' | 'listening' | 'speaking'>('idle');
   const [timeLeft, setTimeLeft] = useState(20 * 60); // 20 minutes in seconds
+  const [musicVol, setMusicVol] = useState(0.3);
 
   // Refs for audio context and processing
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -50,6 +54,11 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, onE
     return () => clearInterval(interval);
   }, [isConnected, onEndSession]);
 
+  // Handle Music Volume
+  useEffect(() => {
+    lyria.setVolume(musicVol);
+  }, [musicVol]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -72,6 +81,15 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, onE
       
       audioContextRef.current = outputCtx;
       inputContextRef.current = inputCtx;
+
+      // Start Lyria Music Engine
+      await lyria.play({
+        binauralFreq: musicConfig.binauralFreq,
+        baseFreq: musicConfig.baseFreq,
+        isochronic: musicConfig.isochronic,
+        theme: theme
+      });
+      lyria.setVolume(musicVol);
 
       // Setup Input Stream with Production Constraints (Echo Cancellation is key for interruption)
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -198,7 +216,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, onE
       console.error(err);
       setError(err.message || "Failed to start session. Check permissions.");
     }
-  }, [systemInstruction]);
+  }, [systemInstruction, musicConfig, theme, musicVol]);
 
   // Volume Polling for Visualizer
   useEffect(() => {
@@ -227,6 +245,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, onE
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      lyria.stop(); // Stop music
       if (processorRef.current) {
         processorRef.current.disconnect();
         processorRef.current.onaudioprocess = null;
@@ -278,9 +297,25 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, onE
       <div className={`absolute inset-0 bg-gradient-to-b ${getThemeStyles(theme)} opacity-80 z-0 pointer-events-none transition-colors duration-1000`} />
       
       {/* Headphone Recommendation */}
-      <div className="absolute top-6 right-6 flex items-center gap-2 text-slate-400 text-xs bg-slate-900/40 px-3 py-1.5 rounded-full border border-slate-700/50 backdrop-blur-sm z-30">
-        <Headphones className="w-3 h-3" />
-        <span>Headphones Recommended</span>
+      <div className="absolute top-6 right-6 flex flex-col gap-2 items-end z-30">
+        <div className="flex items-center gap-2 text-slate-400 text-xs bg-slate-900/40 px-3 py-1.5 rounded-full border border-slate-700/50 backdrop-blur-sm">
+            <Headphones className="w-3 h-3" />
+            <span>Headphones Required for Binaural Beats</span>
+        </div>
+        {isConnected && (
+            <div className="flex items-center gap-2 bg-slate-900/40 px-3 py-1.5 rounded-full border border-slate-700/50 backdrop-blur-sm">
+                <Music className="w-3 h-3 text-purple-400" />
+                <input 
+                    type="range" 
+                    min="0" 
+                    max="1" 
+                    step="0.05"
+                    value={musicVol} 
+                    onChange={(e) => setMusicVol(parseFloat(e.target.value))}
+                    className="w-24 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer"
+                />
+            </div>
+        )}
       </div>
 
       {/* Visualizer */}

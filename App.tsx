@@ -56,13 +56,14 @@ const App: React.FC = () => {
           <LiveSession 
             systemInstruction={sessionPlan.systemInstruction} 
             theme={sessionTheme}
+            musicConfig={sessionPlan.musicConfig}
             onEndSession={handleEndSession} 
           />
         )}
       </main>
       
       <footer className="relative z-10 py-4 text-center text-slate-600 text-xs">
-        <p>&copy; 2024 HypnoFlow AI Demo. Built with Gemini 2.5 Flash & Live API.</p>
+        <p>&copy; 2024 HypnoFlow AI Demo. Built with Gemini 3 Pro & Live API.</p>
       </footer>
     </div>
   );
