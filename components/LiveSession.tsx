@@ -29,7 +29,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const sessionRef = useRef<any>(null); // To store the session object
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   
   // Volume meter refs
@@ -118,27 +118,54 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
       const sessionPromise = ai.live.connect({
         ...config,
         callbacks: {
-          onopen: () => {
+          onopen: async () => {
             console.log("Session opened");
             setIsConnected(true);
             setModelState('listening');
 
             // Setup Audio Processing for Input
             const source = inputCtx.createMediaStreamSource(stream);
-            // Buffer size 4096 gives decent latency/performance balance on main thread
-            const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-            
-            processor.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              const pcmBlob = createPcmBlob(inputData);
-              sessionPromise.then(session => {
-                session.sendRealtimeInput({ media: pcmBlob });
-              });
+
+            const connectWithScriptProcessor = () => {
+              const processor = inputCtx.createScriptProcessor(4096, 1, 1);
+              
+              processor.onaudioprocess = (e) => {
+                const inputData = e.inputBuffer.getChannelData(0);
+                const pcmBlob = createPcmBlob(inputData);
+                sessionPromise.then(session => {
+                  session.sendRealtimeInput({ media: pcmBlob });
+                });
+              };
+  
+              source.connect(processor);
+              processor.connect(inputCtx.destination);
+              processorRef.current = processor;
             };
 
-            source.connect(processor);
-            processor.connect(inputCtx.destination);
-            processorRef.current = processor;
+            if (inputCtx.audioWorklet) {
+              try {
+                // Use AudioWorklet to avoid deprecated ScriptProcessorNode
+                await inputCtx.audioWorklet.addModule('/mic-worklet.js');
+                const workletNode = new AudioWorkletNode(inputCtx, 'mic-capture');
+                
+                workletNode.port.onmessage = (event) => {
+                  const inputData = event.data as Float32Array;
+                  const pcmBlob = createPcmBlob(inputData);
+                  sessionPromise.then(session => {
+                    session.sendRealtimeInput({ media: pcmBlob });
+                  });
+                };
+
+                source.connect(workletNode);
+                workletNode.connect(inputCtx.destination);
+                processorRef.current = workletNode;
+              } catch (err) {
+                console.warn("Falling back to ScriptProcessorNode", err);
+                connectWithScriptProcessor();
+              }
+            } else {
+              connectWithScriptProcessor();
+            }
           },
           onmessage: async (message: LiveServerMessage) => {
             // Handle Audio Output
