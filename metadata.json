@@ -1,0 +1,7 @@
+{
+  "name": "HypnoFlow AI",
+  "description": "A real-time, voice-guided hypnosis therapy application using Gemini Live API and Search Grounding for personalized sessions.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
