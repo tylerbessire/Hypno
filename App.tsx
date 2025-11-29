@@ -9,11 +9,13 @@ type ViewState = 'welcome' | 'intake' | 'session';
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('welcome');
   const [sessionPlan, setSessionPlan] = useState<SessionPlan | null>(null);
-  const [sessionTheme, setSessionTheme] = useState<ThemeType>('nebula');
+  const [sessionTheme, setSessionTheme] = useState<ThemeType>('sage');
+  const [voiceName, setVoiceName] = useState<string>('Zephyr');
 
-  const handleIntakeComplete = (plan: SessionPlan, theme: ThemeType) => {
+  const handleIntakeComplete = (plan: SessionPlan, theme: ThemeType, voice: string) => {
     setSessionPlan(plan);
     setSessionTheme(theme);
+    setVoiceName(voice);
     setCurrentView('session');
   };
 
@@ -27,12 +29,12 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden relative">
       {/* Global decorative background elements */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-900/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-900/20 rounded-full blur-[120px]" />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-900/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-900/10 rounded-full blur-[120px]" />
       </div>
 
       <header className="relative z-10 p-6 flex justify-between items-center backdrop-blur-sm bg-slate-950/30">
-        <div className="text-xl font-bold tracking-tighter text-indigo-300">
+        <div className="text-xl font-bold tracking-tighter text-emerald-400">
           HypnoFlow<span className="text-white">.ai</span>
         </div>
         {currentView === 'session' && (
@@ -57,6 +59,7 @@ const App: React.FC = () => {
             systemInstruction={sessionPlan.systemInstruction} 
             theme={sessionTheme}
             musicConfig={sessionPlan.musicConfig}
+            voiceName={voiceName}
             onEndSession={handleEndSession} 
           />
         )}

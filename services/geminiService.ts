@@ -40,9 +40,10 @@ export const generateSessionPlan = async (userIssue: string, musicPreference: st
         - Decide if **Isochronic tones** (rhythmic pulsing) would aid the induction.
     4.  **Plan Summary**: Brief summary (100-150 words).
     5.  **System Instruction**: Detailed prompt for the Live AI (gemini-2.5-flash-native-audio).
-       - Persona: Calm, hypnotic, warm.
-       - Interactivity: Check in frequently.
-       - Structure: Induction -> Deepening -> Work -> Emergence.
+       - **CRITICAL VOCAL DIRECTIVE**: You MUST speak with a slow, hypnotic cadence. Breathe naturally between phrases. Use dynamic inflection to sound sincere, warm, and empathetic. Do NOT sound robotic or monotone. Vary your pitch and speed to match the emotional content.
+       - **INTERACTION**: Start the session IMMEDIATELY by welcoming the user warmly. Do not wait for them to speak first.
+       - **STRUCTURE**: Induction -> Deepening -> Work -> Emergence.
+       - **BEHAVIOR**: If the user interrupts, stop speaking immediately and listen.
        
     Output purely a JSON object with this schema:
     {

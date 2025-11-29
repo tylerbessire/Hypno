@@ -72,6 +72,13 @@ const Orb: React.FC<OrbProps> = ({ isActive, volume, state, theme }) => {
                  colorEnd = 'rgba(154, 52, 18, 0)'; // Orange 800
                  glowColor = 'rgba(251, 146, 60, 0.1)';
                  break;
+             case 'sage':
+                 // Emerald/Stone
+                 colorStart = 'rgba(52, 211, 153, 0.9)'; // Emerald 400
+                 colorMid = 'rgba(16, 185, 129, 0.5)'; // Emerald 500
+                 colorEnd = 'rgba(28, 25, 23, 0)'; // Stone 900
+                 glowColor = 'rgba(52, 211, 153, 0.1)';
+                 break;
              case 'nebula':
              default:
                  // Violet/Purple
@@ -104,6 +111,13 @@ const Orb: React.FC<OrbProps> = ({ isActive, volume, state, theme }) => {
                 colorMid = 'rgba(244, 63, 94, 0.5)';
                 colorEnd = 'rgba(136, 19, 55, 0)';
                 glowColor = 'rgba(251, 113, 133, 0.1)';
+                break;
+            case 'sage':
+                // Teal/Slate
+                colorStart = 'rgba(20, 184, 166, 0.9)'; // Teal 500
+                colorMid = 'rgba(13, 148, 136, 0.5)'; // Teal 600
+                colorEnd = 'rgba(28, 25, 23, 0)'; // Stone 900
+                glowColor = 'rgba(20, 184, 166, 0.1)';
                 break;
             case 'nebula':
             default:

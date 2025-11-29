@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { Play, Mic, MicOff, PhoneOff, AlertCircle, Headphones, Clock, Music, Volume2, Volume1, VolumeX } from 'lucide-react';
+import { Play, Mic, MicOff, PhoneOff, AlertCircle, Headphones, Clock, Music, Volume2, Volume1, VolumeX, User } from 'lucide-react';
 import Orb from './Orb';
 import { base64ToUint8Array, createPcmBlob, decodeAudioData } from '../utils/audioUtils';
 import { ThemeType } from './Intake';
@@ -11,10 +11,11 @@ interface LiveSessionProps {
   systemInstruction: string;
   theme: ThemeType;
   musicConfig: MusicConfig;
+  voiceName: string;
   onEndSession: () => void;
 }
 
-const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, musicConfig, onEndSession }) => {
+const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, musicConfig, voiceName, onEndSession }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
@@ -22,14 +23,16 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
   const [modelState, setModelState] = useState<'idle' | 'listening' | 'speaking'>('idle');
   const [timeLeft, setTimeLeft] = useState(20 * 60); // 20 minutes in seconds
   const [musicVol, setMusicVol] = useState(0.3);
+  const [voiceVol, setVoiceVol] = useState(1.0);
 
   // Refs for audio context and processing
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const voiceGainRef = useRef<GainNode | null>(null);
   const sessionRef = useRef<any>(null); // To store the session object
-  const processorRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   
   // Volume meter refs
@@ -59,6 +62,13 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
     lyria.setVolume(musicVol);
   }, [musicVol]);
 
+  // Handle Voice Volume
+  useEffect(() => {
+    if (voiceGainRef.current) {
+      voiceGainRef.current.gain.setTargetAtTime(voiceVol, audioContextRef.current?.currentTime || 0, 0.1);
+    }
+  }, [voiceVol]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -81,6 +91,12 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
       
       audioContextRef.current = outputCtx;
       inputContextRef.current = inputCtx;
+
+      // Create Voice Gain Node
+      const vGain = outputCtx.createGain();
+      vGain.gain.value = voiceVol;
+      vGain.connect(outputCtx.destination);
+      voiceGainRef.current = vGain;
 
       // Start Lyria Music Engine
       await lyria.play({
@@ -109,7 +125,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } }, 
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } }, 
           },
           systemInstruction: systemInstruction,
         },
@@ -118,54 +134,32 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
       const sessionPromise = ai.live.connect({
         ...config,
         callbacks: {
-          onopen: async () => {
+          onopen: () => {
             console.log("Session opened");
             setIsConnected(true);
             setModelState('listening');
 
+            // IMMEDIATE START TRICK: Send a tiny silent buffer or handle via instruction.
+            // Since we rely on instruction "Speak first", we just let it be. 
+            // In some versions, sending a text trigger helps, but strictly this is an audio session.
+            // We'll trust the 'gemini-2.5' updated instruction handling.
+
             // Setup Audio Processing for Input
             const source = inputCtx.createMediaStreamSource(stream);
-
-            const connectWithScriptProcessor = () => {
-              const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-              
-              processor.onaudioprocess = (e) => {
-                const inputData = e.inputBuffer.getChannelData(0);
-                const pcmBlob = createPcmBlob(inputData);
-                sessionPromise.then(session => {
-                  session.sendRealtimeInput({ media: pcmBlob });
-                });
-              };
-  
-              source.connect(processor);
-              processor.connect(inputCtx.destination);
-              processorRef.current = processor;
+            // Buffer size 4096 gives decent latency/performance balance on main thread
+            const processor = inputCtx.createScriptProcessor(4096, 1, 1);
+            
+            processor.onaudioprocess = (e) => {
+              const inputData = e.inputBuffer.getChannelData(0);
+              const pcmBlob = createPcmBlob(inputData);
+              sessionPromise.then(session => {
+                session.sendRealtimeInput({ media: pcmBlob });
+              });
             };
 
-            if (inputCtx.audioWorklet) {
-              try {
-                // Use AudioWorklet to avoid deprecated ScriptProcessorNode
-                await inputCtx.audioWorklet.addModule('/mic-worklet.js');
-                const workletNode = new AudioWorkletNode(inputCtx, 'mic-capture');
-                
-                workletNode.port.onmessage = (event) => {
-                  const inputData = event.data as Float32Array;
-                  const pcmBlob = createPcmBlob(inputData);
-                  sessionPromise.then(session => {
-                    session.sendRealtimeInput({ media: pcmBlob });
-                  });
-                };
-
-                source.connect(workletNode);
-                workletNode.connect(inputCtx.destination);
-                processorRef.current = workletNode;
-              } catch (err) {
-                console.warn("Falling back to ScriptProcessorNode", err);
-                connectWithScriptProcessor();
-              }
-            } else {
-              connectWithScriptProcessor();
-            }
+            source.connect(processor);
+            processor.connect(inputCtx.destination);
+            processorRef.current = processor;
           },
           onmessage: async (message: LiveServerMessage) => {
             // Handle Audio Output
@@ -191,7 +185,14 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
               const analyser = ctx.createAnalyser();
               analyser.fftSize = 256;
               source.connect(analyser);
-              analyser.connect(ctx.destination);
+              
+              // Connect through Voice Gain Node
+              if (voiceGainRef.current) {
+                analyser.connect(voiceGainRef.current);
+              } else {
+                analyser.connect(ctx.destination);
+              }
+              
               analyserRef.current = analyser;
 
               source.start(nextStartTimeRef.current);
@@ -243,7 +244,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
       console.error(err);
       setError(err.message || "Failed to start session. Check permissions.");
     }
-  }, [systemInstruction, musicConfig, theme, musicVol]);
+  }, [systemInstruction, musicConfig, theme, musicVol, voiceName, voiceVol]);
 
   // Volume Polling for Visualizer
   useEffect(() => {
@@ -311,6 +312,8 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
         return 'from-cyan-950 via-blue-950 to-slate-950';
       case 'sunrise':
         return 'from-orange-950 via-rose-950 to-slate-950';
+      case 'sage':
+        return 'from-stone-900 via-emerald-950 to-slate-950';
       case 'nebula':
       default:
         return 'from-slate-900 via-indigo-950 to-slate-900';
@@ -323,24 +326,41 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
       {/* Background Ambience */}
       <div className={`absolute inset-0 bg-gradient-to-b ${getThemeStyles(theme)} opacity-80 z-0 pointer-events-none transition-colors duration-1000`} />
       
-      {/* Headphone Recommendation */}
-      <div className="absolute top-6 right-6 flex flex-col gap-2 items-end z-30">
-        <div className="flex items-center gap-2 text-slate-400 text-xs bg-slate-900/40 px-3 py-1.5 rounded-full border border-slate-700/50 backdrop-blur-sm">
+      {/* Headphone & Volume Controls */}
+      <div className="absolute top-6 right-6 flex flex-col gap-4 items-end z-30">
+        <div className="flex items-center gap-2 text-slate-400 text-xs bg-slate-950/40 px-3 py-1.5 rounded-full border border-slate-700/50 backdrop-blur-sm">
             <Headphones className="w-3 h-3" />
             <span>Headphones Required for Binaural Beats</span>
         </div>
+        
         {isConnected && (
-            <div className="flex items-center gap-2 bg-slate-900/40 px-3 py-1.5 rounded-full border border-slate-700/50 backdrop-blur-sm">
-                <Music className="w-3 h-3 text-purple-400" />
-                <input 
-                    type="range" 
-                    min="0" 
-                    max="1" 
-                    step="0.05"
-                    value={musicVol} 
-                    onChange={(e) => setMusicVol(parseFloat(e.target.value))}
-                    className="w-24 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer"
-                />
+            <div className="flex flex-col gap-2 bg-slate-950/40 p-4 rounded-xl border border-slate-700/50 backdrop-blur-sm">
+                 <div className="flex items-center gap-3">
+                    <User className="w-3 h-3 text-emerald-400" />
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="1.5" 
+                        step="0.05"
+                        value={voiceVol} 
+                        onChange={(e) => setVoiceVol(parseFloat(e.target.value))}
+                        className="w-24 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        title="Voice Volume"
+                    />
+                </div>
+                <div className="flex items-center gap-3">
+                    <Music className="w-3 h-3 text-purple-400" />
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="1" 
+                        step="0.05"
+                        value={musicVol} 
+                        onChange={(e) => setMusicVol(parseFloat(e.target.value))}
+                        className="w-24 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                        title="Music Volume"
+                    />
+                </div>
             </div>
         )}
       </div>
@@ -370,11 +390,11 @@ const LiveSession: React.FC<LiveSessionProps> = ({ systemInstruction, theme, mus
       </div>
 
       {/* Controls */}
-      <div className="fixed bottom-8 z-20 flex gap-6 items-center bg-slate-800/80 backdrop-blur-md p-4 rounded-full shadow-2xl border border-slate-700">
+      <div className="fixed bottom-8 z-20 flex gap-6 items-center bg-slate-900/80 backdrop-blur-md p-4 rounded-full shadow-2xl border border-slate-700">
         {!isConnected && !error ? (
           <button 
             onClick={connectToLiveAPI}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-full p-4 transition-all hover:scale-105 shadow-lg shadow-indigo-500/20"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-full p-4 transition-all hover:scale-105 shadow-lg shadow-emerald-500/20"
           >
             <Play className="w-6 h-6 fill-current" />
           </button>
